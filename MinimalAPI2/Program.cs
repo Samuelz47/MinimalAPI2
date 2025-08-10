@@ -1,0 +1,20 @@
+using MinimalAPI2.Domain.DTOs;
+
+var builder = WebApplication.CreateBuilder(args);
+var app = builder.Build();
+
+app.MapGet("/", () => "Hello World!");
+
+app.MapPost("/login", (LoginDTO loginDTO) =>                                                            //Minimal API usamos o Endpoint dentro do program.cs
+{
+    if (loginDTO.Email == "adm@teste.com" && loginDTO.Senha == "123456")                               //Teste de pedreiro pra ver se o login é igual o do adm
+    {
+        return Results.Ok("Login com sucesso!");
+    }
+    else
+    {
+        return Results.Unauthorized();
+    }
+});
+
+app.Run();
