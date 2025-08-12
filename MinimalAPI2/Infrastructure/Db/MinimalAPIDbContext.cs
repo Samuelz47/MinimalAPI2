@@ -12,6 +12,16 @@ public class MinimalAPIDbContext : DbContext
         _configurationAppSettings = configurationAppSettings;
     }
     public DbSet<Administrator> Administradores {  get; set; }                                              //Seta as tabelas
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Administrator>().HasData(new Administrator
+        {
+            Id = 1,
+            Email = "administrator@teste.com",
+            Senha = "123456",
+            Perfil = "Adm"
+        });
+    }
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         if (!optionsBuilder.IsConfigured)                                                                   //Caso o builder ainda não tenha sido configurado
