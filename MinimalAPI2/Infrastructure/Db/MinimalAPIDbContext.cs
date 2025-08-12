@@ -11,6 +11,7 @@ public class MinimalAPIDbContext : DbContext
     {
         _configurationAppSettings = configurationAppSettings;
     }
+    public DbSet<Vehicles> Veiculos { get; set; }
     public DbSet<Administrator> Administradores {  get; set; }                                              //Seta as tabelas
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

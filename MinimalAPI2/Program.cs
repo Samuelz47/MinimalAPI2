@@ -2,12 +2,16 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MinimalAPI2.Domain.DTOs;
 using MinimalAPI2.Domain.Interface;
+using MinimalAPI2.Domain.ModelViews;
 using MinimalAPI2.Domain.Services;
 using MinimalAPI2.Infrastructure.Db;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddScoped<IAdministratorService, AdministratorService>();
+
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
 builder.Services.AddDbContext<MinimalAPIDbContext>(options =>
 {
@@ -17,7 +21,7 @@ builder.Services.AddDbContext<MinimalAPIDbContext>(options =>
 });
 var app = builder.Build();
 
-app.MapGet("/", () => "Hello World!");
+app.MapGet("/", () => Results.Json(new Home()));
 
 app.MapPost("/login", ([FromBody] LoginDTO loginDTO, IAdministratorService administratorService) =>                                                            //Minimal API usamos o Endpoint dentro do program.cs
 {
@@ -30,5 +34,8 @@ app.MapPost("/login", ([FromBody] LoginDTO loginDTO, IAdministratorService admin
         return Results.Unauthorized();
     }
 });
+
+app.UseSwagger();
+app.UseSwaggerUI();
 
 app.Run();
