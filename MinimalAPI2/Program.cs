@@ -1,14 +1,16 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MinimalAPI2.Domain.DTOs;
+using MinimalAPI2.Domain.Entities;
 using MinimalAPI2.Domain.Interface;
 using MinimalAPI2.Domain.ModelViews;
 using MinimalAPI2.Domain.Services;
 using MinimalAPI2.Infrastructure.Db;
-
+#region Builder
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddScoped<IAdministratorService, AdministratorService>();
+builder.Services.AddScoped<IVehicleService, VehicleService>();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -20,9 +22,13 @@ builder.Services.AddDbContext<MinimalAPIDbContext>(options =>
         ServerVersion.AutoDetect(builder.Configuration.GetConnectionString("mysql")));
 });
 var app = builder.Build();
+#endregion
 
-app.MapGet("/", () => Results.Json(new Home()));
+#region Home
+app.MapGet("/", () => Results.Json(new Home())).WithTags("Home");
+#endregion
 
+#region Administrator
 app.MapPost("/login", ([FromBody] LoginDTO loginDTO, IAdministratorService administratorService) =>                                                            //Minimal API usamos o Endpoint dentro do program.cs
 {
     if (administratorService.Login(loginDTO) != null)                                                                                                          //Usando o método criado em AdmService para verificar o login
@@ -33,9 +39,83 @@ app.MapPost("/login", ([FromBody] LoginDTO loginDTO, IAdministratorService admin
     {
         return Results.Unauthorized();
     }
-});
+}).WithTags("Administrator");
+#endregion
 
+#region Vehicle
+app.MapPost("/vehicle", ([FromBody] VehicleDTO vehicleDTO, IVehicleService vehicleService) =>                                                           
+{
+    var vehicle = new Vehicles
+    {
+        Nome = vehicleDTO.Nome,
+        Marca = vehicleDTO.Marca,
+        Ano = vehicleDTO.Ano,
+    };
+    vehicleService.Include(vehicle);
+
+    return Results.Created($"/veiculo/{vehicle.Id}", vehicle);
+}).WithTags("Vehicle");
+
+app.MapGet("/vehicle", ([FromQuery] int? pagina, IVehicleService vehicleService) =>
+{
+    var vehicles = vehicleService.GetVehicles(pagina);
+
+    return Results.Ok(vehicles);
+}).WithTags("Vehicle");
+
+app.MapGet("/vehicle/{id}", ([FromRoute] int id, IVehicleService vehicleService) =>
+{
+    var vehicle = vehicleService.GetById(id);
+
+    if(vehicle == null)
+    {
+        return Results.NotFound();
+    }
+    else
+    { 
+        return Results.Ok(vehicle);
+    }
+}).WithTags("Vehicle");
+
+app.MapPut("/vehicle/{id}", ([FromRoute] int id, VehicleDTO vehicleDTO, IVehicleService vehicleService) =>
+{
+    var vehicle = vehicleService.GetById(id);
+
+    if (vehicle == null)
+    {
+        return Results.NotFound();
+    }
+    else
+    {
+        vehicle.Nome = vehicleDTO.Nome;
+        vehicle.Marca = vehicleDTO.Marca;
+        vehicle.Ano = vehicleDTO.Ano;
+
+        vehicleService.Update(vehicle);
+
+        return Results.Ok(vehicle);
+    }
+}).WithTags("Vehicle");
+
+app.MapDelete("/vehicle/{id}", ([FromRoute] int id, IVehicleService vehicleService) =>
+{
+    var vehicle = vehicleService.GetById(id);
+
+    if (vehicle == null)
+    {
+        return Results.NotFound();
+    }
+    else
+    {
+        vehicleService.Delete(vehicle);
+        return Results.NoContent();
+    }
+}).WithTags("Vehicle");
+#endregion
+
+#region App
 app.UseSwagger();
 app.UseSwaggerUI();
 
 app.Run();
+#endregion

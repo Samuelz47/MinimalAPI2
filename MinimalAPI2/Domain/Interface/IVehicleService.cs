@@ -4,7 +4,7 @@ namespace MinimalAPI2.Domain.Interface;
 
 public interface IVehicleService
 {
-    List<Vehicles> GetVehicles(int pagina = 1, string? nome = null, string? marca = null);
+    List<Vehicles> GetVehicles(int? pagina = 1, string? nome = null, string? marca = null);
     Vehicles? GetById(int id);
     void Include(Vehicles vehicle);
     void Update(Vehicles vehicle);
