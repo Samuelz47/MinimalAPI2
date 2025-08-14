@@ -2,10 +2,12 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MinimalAPI2.Domain.DTOs;
 using MinimalAPI2.Domain.Entities;
+using MinimalAPI2.Domain.Enuns;
 using MinimalAPI2.Domain.Interface;
 using MinimalAPI2.Domain.ModelViews;
 using MinimalAPI2.Domain.Services;
 using MinimalAPI2.Infrastructure.Db;
+using System.Runtime.Intrinsics.Arm;
 #region Builder
 var builder = WebApplication.CreateBuilder(args);
 
@@ -40,11 +42,91 @@ app.MapPost("/login", ([FromBody] LoginDTO loginDTO, IAdministratorService admin
         return Results.Unauthorized();
     }
 }).WithTags("Administrator");
+
+app.MapPost("/administrator", ([FromBody] AdministratorDTO administratorDTO, IAdministratorService administratorService) =>                                                          
+{
+    var validation = new ValidationErrors
+    {
+        Messages = new List<string>()
+    };
+    if (string.IsNullOrEmpty(administratorDTO.Email))
+    {
+        validation.Messages.Add("O Email não pode ser vazio");
+    }
+    if (string.IsNullOrEmpty(administratorDTO.Senha))
+    {
+        validation.Messages.Add("A senha não pode ficar em branco");
+    }
+    if (administratorDTO.Perfil == null)
+    {
+        validation.Messages.Add("O perfil não pode ficar em branco");
+    }
+    if (validation.Messages.Count > 0)
+    {
+        return Results.BadRequest(validation.Messages);
+    }
+
+    var administrator = new Administrator
+    {
+        Email = administratorDTO.Email,
+        Senha = administratorDTO.Senha,
+        Perfil = administratorDTO.Perfil.ToString() ?? Perfil.Editor.ToString()
+    };
+    administratorService.Include(administrator);
+
+    return Results.Created($"/administrator/{administrator.Id}", new AdministratorModelView
+    {
+        Id = administrator.Id,
+        Email = administrator.Email,
+        Perfil = administrator.Perfil
+    });
+}).WithTags("Administrator");
+
+app.MapGet("/administrator", ([FromQuery] int? pagina, IAdministratorService administratorService) =>
+{
+    var adms = new List<AdministratorModelView>();
+    var administrators = administratorService.GetAdm(pagina);
+    foreach (var adm in administrators)
+    {
+        adms.Add(new AdministratorModelView
+        {
+            Id = adm.Id,
+            Email = adm.Email,
+            Perfil = adm.Perfil
+        });
+    }
+    return Results.Ok(adms);
+}).WithTags("Administrator");
+
+app.MapGet("/administrator/{id}", ([FromRoute] int id, IAdministratorService administratorService) =>
+{
+    var administrator = administratorService.GetById(id);
+
+    if (administrator == null)
+    {
+        return Results.NotFound();
+    }
+    else
+    {
+        return Results.Ok(new AdministratorModelView
+        {
+            Id = administrator.Id,
+            Email = administrator.Email,
+            Perfil = administrator.Perfil
+        });
+    }
+}).WithTags("Administrator");
 #endregion
 
 #region Vehicle
 app.MapPost("/vehicle", ([FromBody] VehicleDTO vehicleDTO, IVehicleService vehicleService) =>                                                           
 {
+    var validation = validationDTO(vehicleDTO);
+    if (validation.Messages.Count > 0)
+    {
+        return Results.BadRequest(validation.Messages);
+    }
+
     var vehicle = new Vehicles
     {
         Nome = vehicleDTO.Nome,
@@ -85,16 +167,20 @@ app.MapPut("/vehicle/{id}", ([FromRoute] int id, VehicleDTO vehicleDTO, IVehicle
     {
         return Results.NotFound();
     }
-    else
+
+    var validation = validationDTO(vehicleDTO);
+    if (validation.Messages.Count > 0)
     {
-        vehicle.Nome = vehicleDTO.Nome;
-        vehicle.Marca = vehicleDTO.Marca;
-        vehicle.Ano = vehicleDTO.Ano;
-
-        vehicleService.Update(vehicle);
-
-        return Results.Ok(vehicle);
+        return Results.BadRequest(validation.Messages);
     }
+
+    vehicle.Nome = vehicleDTO.Nome;
+    vehicle.Marca = vehicleDTO.Marca;
+    vehicle.Ano = vehicleDTO.Ano;
+
+    vehicleService.Update(vehicle);
+
+    return Results.Ok(vehicle);
 }).WithTags("Vehicle");
 
 app.MapDelete("/vehicle/{id}", ([FromRoute] int id, IVehicleService vehicleService) =>
@@ -119,3 +205,26 @@ app.UseSwaggerUI();
 
 app.Run();
 #endregion
+
+ValidationErrors validationDTO(VehicleDTO vehicleDTO)
+{
+    var validation = new ValidationErrors
+    {
+        Messages = new List<string>()
+    };
+
+    if (string.IsNullOrEmpty(vehicleDTO.Nome))
+    {
+        validation.Messages.Add("O Nome não pode ser vazio");
+    }
+    if (string.IsNullOrEmpty(vehicleDTO.Marca))
+    {
+        validation.Messages.Add("A marca não pode ficar em branco");
+    }
+    if (vehicleDTO.Ano > 2026 || vehicleDTO.Ano < 1885)
+    {
+        validation.Messages.Add("O ano é inválido");
+    }
+
+    return validation;
+}
