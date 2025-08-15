@@ -1,5 +1,7 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using MinimalAPI2.Domain.DTOs;
 using MinimalAPI2.Domain.Entities;
 using MinimalAPI2.Domain.Enuns;
@@ -7,9 +9,30 @@ using MinimalAPI2.Domain.Interface;
 using MinimalAPI2.Domain.ModelViews;
 using MinimalAPI2.Domain.Services;
 using MinimalAPI2.Infrastructure.Db;
+using System.ComponentModel.DataAnnotations;
+using System.IdentityModel.Tokens.Jwt;
 using System.Runtime.Intrinsics.Arm;
+using System.Security.Claims;
+using System.Text;
+
 #region Builder
 var builder = WebApplication.CreateBuilder(args);
+var key = builder.Configuration.GetSection("Jwt").ToString();
+
+builder.Services.AddAuthentication(option =>
+{
+    option.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;                      //Configuração do JWT Authentication
+    option.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+}).AddJwtBearer(option =>
+{
+    option.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateLifetime = true,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)),
+    };
+});
+
+builder.Services.AddAuthorization();
 
 builder.Services.AddScoped<IAdministratorService, AdministratorService>();
 builder.Services.AddScoped<IVehicleService, VehicleService>();
@@ -31,11 +54,45 @@ app.MapGet("/", () => Results.Json(new Home())).WithTags("Home");
 #endregion
 
 #region Administrator
+string GenerateToken(Administrator administrator)
+{
+    if (string.IsNullOrEmpty(key))
+    {
+        return string.Empty;
+    }
+    else
+    {
+        var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key));                                                                                //Criptografia
+        var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
+
+        var claims = new List<Claim>()
+        {
+            new Claim("Email", administrator.Email),
+            new Claim("Perfil", administrator.Perfil)
+        };
+        var token = new JwtSecurityToken
+        (
+            claims: claims,
+            expires: DateTime.Now.AddDays(1),
+            signingCredentials: credentials
+        );
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+}
+
 app.MapPost("/login", ([FromBody] LoginDTO loginDTO, IAdministratorService administratorService) =>                                                            //Minimal API usamos o Endpoint dentro do program.cs
 {
-    if (administratorService.Login(loginDTO) != null)                                                                                                          //Usando o método criado em AdmService para verificar o login
+    var administrator = administratorService.Login(loginDTO);
+    if (administrator != null)                                                                                                          //Usando o método criado em AdmService para verificar o login
     {
-        return Results.Ok("Login com sucesso!");
+        string token = GenerateToken(administrator);
+        return Results.Ok(new AdmLogged
+        {
+            Email = administrator.Email,
+            Perfil = administrator.Perfil,
+            Token = token
+        });
     }
     else
     {
@@ -80,7 +137,7 @@ app.MapPost("/administrator", ([FromBody] AdministratorDTO administratorDTO, IAd
         Email = administrator.Email,
         Perfil = administrator.Perfil
     });
-}).WithTags("Administrator");
+}).RequireAuthorization().WithTags("Administrator");
 
 app.MapGet("/administrator", ([FromQuery] int? pagina, IAdministratorService administratorService) =>
 {
@@ -96,7 +153,7 @@ app.MapGet("/administrator", ([FromQuery] int? pagina, IAdministratorService adm
         });
     }
     return Results.Ok(adms);
-}).WithTags("Administrator");
+}).RequireAuthorization().WithTags("Administrator");
 
 app.MapGet("/administrator/{id}", ([FromRoute] int id, IAdministratorService administratorService) =>
 {
@@ -115,7 +172,7 @@ app.MapGet("/administrator/{id}", ([FromRoute] int id, IAdministratorService adm
             Perfil = administrator.Perfil
         });
     }
-}).WithTags("Administrator");
+}).RequireAuthorization().WithTags("Administrator");
 #endregion
 
 #region Vehicle
@@ -136,14 +193,14 @@ app.MapPost("/vehicle", ([FromBody] VehicleDTO vehicleDTO, IVehicleService vehic
     vehicleService.Include(vehicle);
 
     return Results.Created($"/veiculo/{vehicle.Id}", vehicle);
-}).WithTags("Vehicle");
+}).RequireAuthorization().WithTags("Vehicle");
 
 app.MapGet("/vehicle", ([FromQuery] int? pagina, IVehicleService vehicleService) =>
 {
     var vehicles = vehicleService.GetVehicles(pagina);
 
     return Results.Ok(vehicles);
-}).WithTags("Vehicle");
+}).RequireAuthorization().WithTags("Vehicle");
 
 app.MapGet("/vehicle/{id}", ([FromRoute] int id, IVehicleService vehicleService) =>
 {
@@ -157,7 +214,7 @@ app.MapGet("/vehicle/{id}", ([FromRoute] int id, IVehicleService vehicleService)
     { 
         return Results.Ok(vehicle);
     }
-}).WithTags("Vehicle");
+}).RequireAuthorization().WithTags("Vehicle");
 
 app.MapPut("/vehicle/{id}", ([FromRoute] int id, VehicleDTO vehicleDTO, IVehicleService vehicleService) =>
 {
@@ -181,7 +238,7 @@ app.MapPut("/vehicle/{id}", ([FromRoute] int id, VehicleDTO vehicleDTO, IVehicle
     vehicleService.Update(vehicle);
 
     return Results.Ok(vehicle);
-}).WithTags("Vehicle");
+}).RequireAuthorization().WithTags("Vehicle");
 
 app.MapDelete("/vehicle/{id}", ([FromRoute] int id, IVehicleService vehicleService) =>
 {
@@ -196,12 +253,15 @@ app.MapDelete("/vehicle/{id}", ([FromRoute] int id, IVehicleService vehicleServi
         vehicleService.Delete(vehicle);
         return Results.NoContent();
     }
-}).WithTags("Vehicle");
+}).RequireAuthorization().WithTags("Vehicle");
 #endregion
 
 #region App
 app.UseSwagger();
 app.UseSwaggerUI();
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.Run();
 #endregion
